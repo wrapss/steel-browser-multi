@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html data-theme="<%= theme %>">
+
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -20,24 +21,26 @@
       --text-color: #000000;
     }
 
-    html, body {
+    html,
+    body {
       margin: 0;
       padding: 0;
       width: 100%;
       height: 100%;
-      background: var(--bg-primary);
+      achtergrond: var(--bg-primary);
       overflow: hidden;
     }
+
     .container {
       width: 100%;
       height: 100%;
       background: var(--bg-primary);
-      border: none;
       display: flex;
       flex-direction: column;
       box-sizing: border-box;
       overflow: hidden;
     }
+
     .top-bar {
       height: 40px;
       flex: 0 0 40px;
@@ -45,10 +48,10 @@
       border-bottom: 1px solid var(--border-color);
       display: flex;
       align-items: center;
-      justify-content: center;
       padding: 6px;
       box-sizing: border-box;
     }
+
     .url-bar {
       width: 80%;
       max-width: 800px;
@@ -63,12 +66,14 @@
       color: var(--text-color);
       font-family: system-ui, -apple-system, sans-serif;
     }
+
     .favicon {
       width: 14px;
       height: 14px;
       object-fit: contain;
       margin-right: 4px;
     }
+
     .url-input {
       flex: 1;
       border: none;
@@ -79,6 +84,7 @@
       outline: none;
       width: 100%;
     }
+
     .content {
       min-height: 0;
       flex: 1;
@@ -89,6 +95,7 @@
       justify-content: center;
       position: relative;
     }
+
     #canvas {
       position: absolute;
       height: 100%;
@@ -98,7 +105,6 @@
       object-fit: contain;
     }
 
-    /* Add styles for navigation buttons */
     .nav-buttons {
       display: flex;
       gap: 4px;
@@ -124,10 +130,52 @@
     .nav-button:hover {
       opacity: 1;
     }
+
+    /* Tab styles */
+    .tabs-container {
+      flex: 0 0 40px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      overflow-x: auto;
+      padding: 4px;
+      gap: 4px;
+    }
+
+    .tab {
+      display: flex;
+      align-items: center;
+      padding: 4px 12px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      cursor: pointer;
+      white-space: nowrap;
+      color: var(--text-color);
+      font-size: 13px;
+      gap: 6px;
+      max-width: 300px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: background 0.2s;
+    }
+
+    .tab.active {
+      background: var(--bg-secondary);
+      border-bottom: none;
+    }
+
+    .tab:hover {
+      background: var(--bg-secondary);
+    }
   </style>
 </head>
+
 <body>
   <div class="container">
+    <!-- Tabs container -->
+    <div class="tabs-container" id="tabs-container"></div>
+
     <% if (showControls) { %>
       <div class="top-bar">
         <div class="nav-buttons">
@@ -136,85 +184,112 @@
         </div>
         <div class="url-bar">
           <img id="favicon" src="/placeholder-favicon.png" class="favicon" alt="Favicon">
-          <input type="text" id="url-text" class="url-input" value="Session not connected" <%= interactive ? "" : "readonly" %>>
+          <input type="text" id="url-text" class="url-input" value="Session not connected" <%=interactive ? ""
+            : "readonly" %>>
         </div>
       </div>
-    <% } %>
-    <div class="content">
-      <canvas id="canvas"></canvas>
-    </div>
+      <% } %>
+        <div class="content">
+          <canvas id="canvas"></canvas>
+        </div>
   </div>
-
   <script>
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d', { alpha: false });
     const urlText = document.getElementById('url-text');
     const favicon = document.getElementById('favicon');
-    
-    let currentImageWidth = <%= dimensions ? dimensions.width : 1920 %>;  // Default size until we get first image
-    let currentImageHeight = <%= dimensions ? dimensions.height : 1080 %>;
-    
+    const tabsContainer = document.getElementById('tabs-container');
+    let pages = {};
+    let currentPageId = null;
+
     function updateCanvasSize() {
       const container = canvas.parentElement;
       const parentHeight = container.clientHeight;
-      
-      // Scale to height while maintaining aspect ratio
+      const currentPage = pages[currentPageId];
+      if (!currentPage || !currentPage.dimensions) return;
+      const { width: imgWidth, height: imgHeight } = currentPage.dimensions;
       const targetHeight = parentHeight;
-      const targetWidth = targetHeight * (currentImageWidth / currentImageHeight);
-      
-      // Account for device pixel ratio
+      const targetWidth = targetHeight * (imgWidth / imgHeight);
       const dpr = window.devicePixelRatio || 1;
-      
       canvas.width = targetWidth * dpr;
       canvas.height = targetHeight * dpr;
-      
-      // Scale context to handle DPR
       ctx.scale(dpr, dpr);
-      
-      // Set display size
       canvas.style.height = '100%';
       canvas.style.width = 'auto';
     }
-    
+
     window.addEventListener('resize', updateCanvasSize);
-    updateCanvasSize();
 
     const ws = new WebSocket('<%= wsUrl %>');
-    
-    // Update mouse event calculation to better handle scaling and positioning
-    function getScaledCoordinates(e) {
-      const rect = canvas.getBoundingClientRect();
-      const canvasWidth = rect.width;
-      const canvasHeight = rect.height;
-      
-      // Calculate the actual scaling factors
-      const scaleX = currentImageWidth / canvasWidth;
-      const scaleY = currentImageHeight / canvasHeight;
-      
-      // Calculate the canvas offset from the left edge of the viewport
-      const canvasLeftOffset = rect.left;
-      
-      // Calculate scaled coordinates relative to the canvas
-      const x = Math.round((e.clientX - canvasLeftOffset) * scaleX);
-      
-      // Account for the top bar if present and calculate y coordinate
-      const topBarOffset = 0;
-      const y = Math.round((e.clientY - rect.top - topBarOffset) * scaleY);
-      
-      // Ensure coordinates are within bounds
-      return {
-        x: Math.max(0, Math.min(x, currentImageWidth)),
-        y: Math.max(0, Math.min(y, currentImageHeight))
-      };
-    } 
 
-    // Wrap all event listeners in conditional setup
+    function getScaledCoordinates(e) {
+        // Obtenir les dimensions et la position du canvas
+        const rect = canvas.getBoundingClientRect();
+        const canvasWidth = rect.width;
+        const canvasHeight = rect.height;
+
+        // Vérifier les dimensions de l'image actuelle
+        const currentPage = pages[currentPageId];
+        if (!currentPage || !currentPage.dimensions) {
+          console.warn("Page ou dimensions non définies");
+          return { x: 0, y: 0 };
+        }
+        const { width: imgWidth, height: imgHeight } = currentPage.dimensions;
+
+        // Calculer les facteurs d'échelle
+        const scaleX = imgWidth / canvasWidth;
+        const scaleY = imgHeight / canvasHeight;
+
+        // Calculer les coordonnées ajustées
+        const x = Math.round((e.clientX - rect.left) * scaleX);
+        const y = Math.round((e.clientY - rect.top) * scaleY);
+
+        // Limiter les coordonnées aux dimensions de l'image
+        return {
+          x: Math.max(0, Math.min(x, imgWidth)),
+          y: Math.max(0, Math.min(y, imgHeight))
+        };
+      }
+
+    function addTab(pageId, url, faviconSrc) {
+      const tab = document.createElement('div');
+      tab.className = 'tab';
+      tab.dataset.pageId = pageId;
+      tab.innerHTML = `<img src="${faviconSrc || '/placeholder-favicon.png'}" class="favicon" alt="Favicon"> ${url}`;
+      tab.addEventListener('click', () => selectTab(pageId));
+      tabsContainer.appendChild(tab);
+      if (!currentPageId) {
+        selectTab(pageId);
+      }
+    }
+
+    function selectTab(pageId) {
+      if (!pages[pageId]) return;
+      currentPageId = pageId;
+      document.querySelectorAll('.tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.pageId === pageId);
+      });
+      if (urlText && pages[pageId].url) {
+        urlText.value = pages[pageId].url;
+      }
+      if (favicon && pages[pageId].favicon) {
+        favicon.src = pages[pageId].favicon;
+      }
+      if (pages[pageId].data) {
+        const img = new Image();
+        img.onload = () => {
+          pages[pageId].dimensions = { width: img.naturalWidth, height: img.naturalHeight };
+          updateCanvasSize();
+          ctx.drawImage(img, 0, 0, canvas.width / window.devicePixelRatio, canvas.height / window.devicePixelRatio);
+        };
+        img.src = 'data:image/jpeg;base64,' + pages[pageId].data;
+      }
+    }
+
     <% if (interactive) { %>
       canvas.addEventListener('mousedown', (e) => {
-        console.log('mousedown coords', e);
+        if (!currentPageId) return;
         const coords = getScaledCoordinates(e);
-        console.log('mousedown scaled coords', coords);
-        
         ws.send(JSON.stringify({
           type: 'mouseEvent',
           pageId: currentPageId,
@@ -230,10 +305,8 @@
       });
 
       canvas.addEventListener('mouseup', (e) => {
-        console.log('mouseup coords', e);
+        if (!currentPageId) return;
         const coords = getScaledCoordinates(e);
-        console.log('mouseup scaled coords', coords);
-        
         ws.send(JSON.stringify({
           type: 'mouseEvent',
           pageId: currentPageId,
@@ -249,8 +322,8 @@
       });
 
       canvas.addEventListener('wheel', (e) => {
+        if (!currentPageId) return;
         const coords = getScaledCoordinates(e);
-        
         ws.send(JSON.stringify({
           type: 'mouseEvent',
           pageId: currentPageId,
@@ -268,9 +341,7 @@
       });
 
       document.addEventListener('keydown', (e) => {
-        // Skip if URL input is focused
-        if (urlText && document.activeElement === urlText) return;
-        
+        if (!currentPageId || (urlText && document.activeElement === urlText)) return;
         ws.send(JSON.stringify({
           type: 'keyEvent',
           pageId: currentPageId,
@@ -285,9 +356,7 @@
       });
 
       document.addEventListener('keyup', (e) => {
-        // Skip if URL input is focused
-        if (urlText && document.activeElement === urlText) return;
-        
+        if (!currentPageId || (urlText && document.activeElement === urlText)) return;
         ws.send(JSON.stringify({
           type: 'keyEvent',
           pageId: currentPageId,
@@ -303,21 +372,15 @@
 
       if (urlText) {
         urlText.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') {
+          if (e.key === 'Enter' && currentPageId) {
             e.preventDefault();
             const url = urlText.value;
             ws.send(JSON.stringify({
               type: 'navigation',
               pageId: currentPageId,
-              event: {
-                url: url
-              }
+              event: { url }
             }));
-            // Send message to parent frame about manual URL change
-            window.parent.postMessage({
-              type: 'navigation',
-              url: url
-            }, '*');
+            window.parent.postMessage({ type: 'navigation', url }, '*');
             urlText.blur();
           }
         });
@@ -326,65 +389,81 @@
       <% if (showControls) { %>
         const backButton = document.getElementById('back-button');
         const forwardButton = document.getElementById('forward-button');
-
         backButton.addEventListener('click', () => {
-          ws.send(JSON.stringify({
-            type: 'navigation',
-            pageId: currentPageId,
-            event: { action: 'back' }
-          }));
+          if (currentPageId) {
+            ws.send(JSON.stringify({
+              type: 'navigation',
+              pageId: currentPageId,
+              event: { action: 'back' }
+            }));
+          }
         });
-
         forwardButton.addEventListener('click', () => {
-          ws.send(JSON.stringify({
-            type: 'navigation',
-            pageId: currentPageId,
-            event: { action: 'forward' }
-          }));
+          if (currentPageId) {
+            ws.send(JSON.stringify({
+              type: 'navigation',
+              pageId: currentPageId,
+              event: { action: 'forward' }
+            }));
+          }
         });
       <% } %>
     <% } %>
 
-    let currentPageId = '';
-
-    ws.onmessage = (event) => {
-      const payload = JSON.parse(event.data);
-      currentPageId = payload.pageId;
-
-      if (payload.url) {
-        if (urlText && document.activeElement !== urlText) {
-          urlText.value = payload.url;
+      ws.onmessage = (event) => {
+        const payload = JSON.parse(event.data);
+        if (payload.type === 'pageClosed') {
+          const pageId = payload.pageId;
+          if (pages[pageId]) {
+            delete pages[pageId];
+            const tab = tabsContainer.querySelector(`.tab[data-page-id="${pageId}"]`);
+            if (tab) tab.remove();
+            if (currentPageId === pageId) {
+              const remainingPages = Object.keys(pages);
+              if (remainingPages.length > 0) {
+                selectTab(remainingPages[0]);
+              } else {
+                currentPageId = null;
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                if (urlText) urlText.value = 'No tabs open';
+                if (favicon) favicon.src = '/placeholder-favicon.png';
+              }
+            }
+          }
+          return;
         }
-        // Send message to parent frame about URL change
-        window.parent.postMessage({
-          type: 'navigation',
-          url: payload.url,
-          favicon: payload.favicon
-        }, '*');
-      }
-      if (payload.favicon && favicon) {
-        favicon.src = payload.favicon;
-      }
-      
-      if (payload.data) {
-        const img = new Image();
-        img.onload = () => {
-          // Update image dimensions and resize canvas when we get a new image
-          currentImageWidth = img.naturalWidth;
-          currentImageHeight = img.naturalHeight;
-          updateCanvasSize();
-          
-          ctx.drawImage(
-            img,
-            0,
-            0,
-            Math.floor(canvas.width / window.devicePixelRatio),
-            Math.floor(canvas.height / window.devicePixelRatio)
-          );
-        };
-        img.src = 'data:image/jpeg;base64,' + payload.data;
-      }
-    };
+
+        const { pageId, url, favicon, data } = payload;
+        if (!pages[pageId]) {
+          pages[pageId] = { url, favicon, data, dimensions: { width: <%= dimensions? dimensions.width : 1920 %>, height: <%= dimensions? dimensions.height : 1080 %> } };
+          addTab(pageId, url, favicon);
+        } else {
+          pages[pageId] = { url, favicon, data, dimensions: pages[pageId].dimensions };
+          const tab = tabsContainer.querySelector(`.tab[data-page-id="${pageId}"]`);
+          if (tab) {
+            tab.innerHTML = `<img src="${favicon || '/placeholder-favicon.png'}" class="favicon" alt="Favicon"> ${url}`;
+          }
+        }
+
+        if (pageId === currentPageId) {
+          if (url && urlText && document.activeElement !== urlText) {
+            urlText.value = url;
+          }
+          if (favicon && favicon) {
+            favicon.src = favicon;
+          }
+          window.parent.postMessage({ type: 'navigation', url, favicon }, '*');
+          if (data) {
+            const img = new Image();
+            img.onload = () => {
+              pages[pageId].dimensions = { width: img.naturalWidth, height: img.naturalHeight };
+              updateCanvasSize();
+              ctx.drawImage(img, 0, 0, canvas.width / window.devicePixelRatio, canvas.height / window.devicePixelRatio);
+            };
+            img.src = 'data:image/jpeg;base64,' + data;
+          }
+        }
+      };
 
     ws.onerror = (error) => {
       console.error('WebSocket error:', error);
@@ -395,4 +474,5 @@
     };
   </script>
 </body>
-</html> 
+
+</html>
