@@ -11,7 +11,7 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces",
-    "backend": "npm run dev -w api"
+    "backend": "node scripts/run-backend.js"
   },
   "devDependencies": {
     "concurrently": "^8.2.0",
