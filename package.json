@@ -11,7 +11,7 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces",
-    "dev": "concurrently \"npm run dev -w api\" \"npm run dev -w ui\""
+    "backend": "npm run dev -w api"
   },
   "devDependencies": {
     "concurrently": "^8.2.0",
